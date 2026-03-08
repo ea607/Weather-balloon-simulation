@@ -4,6 +4,7 @@ import math
 from atmos_model import SimpleAtmosphere, TZERO, PZERO, RHOZERO
 from aigfs_extractor import WindPredictor
 import pymap3d as pm
+import datetime
 
 EARTH_MASS = 5.9722 * 10**24
 GRAVITATIONAL_CONST = 6.6743 * 10**-11
@@ -58,13 +59,13 @@ class Particle:
         return f"P#{self.id}, POS={self.position.round(3).tolist()}, VEL={self.velocity.round(3).tolist()}, ACC={self.acceleration.round(3).tolist()}"
     
 class WeatherBalloon(Particle):
-    def __init__(self, lat=90, lon=0):
+    def __init__(self, lat=90, lon=0, mass=0.4, radius=0.5, burst_radius=1.5):
         super().__init__()
 
-        self.mass = 0.400
-        self.radius = 0.5
+        self.mass = mass
+        self.radius = radius
         # radius at bursting point
-        self.burst_radius = 1.5
+        self.burst_radius = burst_radius
 
         self.volume = (4/3) * math.pi * (self.radius **3)
         self.initial_radius = self.radius
@@ -78,7 +79,7 @@ class WeatherBalloon(Particle):
         # wind data comes from large database so dont recalculate if we havent moved signifcantly
         self._wind_cache = np.zeros(3)
         self._last_wind_pos = np.array(self.position)
-        self._wind_threshold = 100
+        self._wind_threshold = 500
         # location is north pole
         x, y, z = pm.geodetic2ecef(lat, lon, 0)
         print([x,y,z])
@@ -156,18 +157,31 @@ from mpl_toolkits.mplot3d import Axes3D
 
 lat = float(input("Enter latitude "))
 lon = float(input("Enter longitude "))
-p = WeatherBalloon(lat, lon)
+p = WeatherBalloon(lat=lat, lon=lon)
+
 dt = 0.1
 positions = []
-
+start_time = datetime.datetime.now()
+simulation_time_passed = 0
 for i in range(50000):
     if i % 500 == 0:
         print(i)
+        print(np.linalg.norm(p.acceleration))
+        
         print(p.getStatus())
+
+    # try changing time step for efficieny
+    if np.linalg.norm(p.acceleration)<0.01:
+        dt = 2
+    else:
+        dt = 0.1
     p.update(dt)
+    simulation_time_passed += dt
     if p.hasBurst:
         break
     positions.append(p.position.copy())
+print(f"SIMULATION TIME PASSED: {simulation_time_passed}")
+print(f"EXECUTION TIME: {datetime.datetime.now() - start_time}")
 
 lats, lons, alts = [], [], []
 for pos in positions:
