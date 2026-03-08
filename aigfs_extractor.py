@@ -81,7 +81,7 @@ class WindPredictor():
         
         #print(self.ds['u'].sel(isobaricInhPa=pressure, latitude=lat, longitude=lon, method="nearest"))
         return u_val, v_val
-    def getWindEC(self, x, y, z, altitude, pressure, debug=True):
+    def getWindEC(self, x, y, z, altitude, pressure, debug=False):
         lat, lon, alt = pm.ecef2geodetic(x, y, z)
         if lon<0:
             lon = 360+lon

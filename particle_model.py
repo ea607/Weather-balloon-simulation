@@ -61,12 +61,20 @@ class WeatherBalloon(Particle):
     def __init__(self, lat=90, lon=0):
         super().__init__()
 
-        self.mass = 0.200
+        self.mass = 0.400
         self.radius = 0.5
-        
+        # radius at bursting point
+        self.burst_radius = 1.5
+
         self.volume = (4/3) * math.pi * (self.radius **3)
-        self.drag_coeffient = 0.3
+        self.initial_radius = self.radius
+        self.initial_volume = self.volume
+        self.burst_volume = (4/3) * math.pi * (self.burst_radius **3)
+        self.drag_coeffient = 0.35
         self.area = math.pi* (self.radius ** 2)
+
+        self.hasBurst = False
+        
         # wind data comes from large database so dont recalculate if we havent moved signifcantly
         self._wind_cache = np.zeros(3)
         self._last_wind_pos = np.array(self.position)
@@ -126,10 +134,21 @@ class WeatherBalloon(Particle):
             self._wind_cache = windPredictor.getWindEC(x, y, z, self.calculateAltitude(), pressure=pressure)
             self._last_wind_pos = np.array(self.position)
         return self._wind_cache
+    def updateVolume(self):
+        air_density, pressure, temp = self.calculateStatsAtAlt(self.calculateAltitude())
+        self.volume = (self.initial_volume) * (SEA_LEVEL_PRESSURE / pressure) * (temp/TZERO)
+        if self.volume >= self.burst_volume:
+            self.burst()
+    def burst(self):
+        print(f"BALLOON BURST at ALT={self.calculateAltitude()}")
+        self.hasBurst = True
+    def onUpdate(self, dt):
+        self.updateVolume()
     def getStatus(self):
         output = "WEATHER BALLOON\n"
         output += f"P#{self.id}, POS={self.position.round(3).tolist()}, VEL={self.velocity.round(3).tolist()}, ACC={self.acceleration.round(3).tolist()}"
-        output += f"\nALT={self.calculateAltitude()}, WIND={self.calculateWindVec()}"
+        output += f"\nALT={self.calculateAltitude()}, WIND={self.calculateWindVec()}\n"
+        output += f"VOL={self.volume}"
         return output
 
 import matplotlib.pyplot as plt
@@ -141,11 +160,13 @@ p = WeatherBalloon(lat, lon)
 dt = 0.1
 positions = []
 
-for i in range(20000):
+for i in range(50000):
     if i % 500 == 0:
         print(i)
         print(p.getStatus())
     p.update(dt)
+    if p.hasBurst:
+        break
     positions.append(p.position.copy())
 
 lats, lons, alts = [], [], []
