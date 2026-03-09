@@ -80,6 +80,9 @@ class WeatherBalloon(Particle):
         self._wind_cache = np.zeros(3)
         self._last_wind_pos = np.array(self.position)
         self._wind_threshold = 500
+        self._alt = 0
+        self._lat = lat
+        self._lon = lon
         # location is north pole
         x, y, z = pm.geodetic2ecef(lat, lon, 0)
         print([x,y,z])
@@ -97,9 +100,6 @@ class WeatherBalloon(Particle):
         return force_mag * force_unit_vec
     def calculateWeight(self):
         return self.calculateG() * self.mass
-    def calculateAltitude(self):
-        lat, lon, alt = pm.ecef2geodetic(*self.position)
-        return alt
 
     def calculateStatsAtAlt(self, altitude):
         density_rel, pressure_rel, temp_rel = SimpleAtmosphere(altitude/1000)
@@ -110,13 +110,13 @@ class WeatherBalloon(Particle):
         # calculate g at current altitude
         g = self.calculateG()
         # calculate density of air at our current altitude
-        air_density, pressure, temp = self.calculateStatsAtAlt(self.calculateAltitude())
+        air_density, pressure, temp = self.calculateStatsAtAlt(self._alt)
         # calculate weight of displaced air
         # to get lift direction is opposite to g
         lift = (air_density * self.volume) * g * -1
         return lift
     def calculateDrag(self):
-        air_density, pressure, temp = self.calculateStatsAtAlt(self.calculateAltitude())
+        air_density, pressure, temp = self.calculateStatsAtAlt(self._alt)
         # https://www.grc.nasa.gov/www/k-12/VirtualAero/BottleRocket/airplane/drageq.html
 
         wind_vec = self.calculateWindVec()
@@ -130,79 +130,35 @@ class WeatherBalloon(Particle):
     def calculateWindVec(self):
         dist_moved = np.linalg.norm(self.position - self._last_wind_pos)
         if dist_moved > self._wind_threshold:
-            air_density, pressure, temp = self.calculateStatsAtAlt(self.calculateAltitude())
+            air_density, pressure, temp = self.calculateStatsAtAlt(self._alt)
             x, y, z = self.position
-            self._wind_cache = windPredictor.getWindEC(x, y, z, self.calculateAltitude(), pressure=pressure)
+            self._wind_cache = windPredictor.getWindEC(x, y, z, self._alt, pressure=pressure)
             self._last_wind_pos = np.array(self.position)
         return self._wind_cache
     def updateVolume(self):
-        air_density, pressure, temp = self.calculateStatsAtAlt(self.calculateAltitude())
+        #print("ALT!!!!", self.calculateAltitude())
+        air_density, pressure, temp = self.calculateStatsAtAlt(self._alt)
+        #print("PRESSURE!!!!", pressure)
         self.volume = (self.initial_volume) * (SEA_LEVEL_PRESSURE / pressure) * (temp/TZERO)
+        
         if self.volume >= self.burst_volume:
             self.burst()
     def burst(self):
-        print(f"BALLOON BURST at ALT={self.calculateAltitude()}")
+        print(f"BALLOON BURST at ALT={self._alt}")
         self.hasBurst = True
     def onUpdate(self, dt):
+        self._lat, self._lon, self._alt = pm.ecef2geodetic(*self.position)
         self.updateVolume()
     def getStatus(self):
         output = "WEATHER BALLOON\n"
         output += f"P#{self.id}, POS={self.position.round(3).tolist()}, VEL={self.velocity.round(3).tolist()}, ACC={self.acceleration.round(3).tolist()}"
-        output += f"\nALT={self.calculateAltitude()}, WIND={self.calculateWindVec()}\n"
+        output += f"\nALT={self._alt}, WIND={self.calculateWindVec()}\n"
         output += f"VOL={self.volume}"
+        output += f"\nLAT, LON={self._lat}, {self._lon}"
         return output
 
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
-lat = float(input("Enter latitude "))
-lon = float(input("Enter longitude "))
-p = WeatherBalloon(lat=lat, lon=lon)
-
-dt = 0.1
-positions = []
-start_time = datetime.datetime.now()
-simulation_time_passed = 0
-for i in range(50000):
-    if i % 500 == 0:
-        print(i)
-        print(np.linalg.norm(p.acceleration))
-        
-        print(p.getStatus())
-
-    # try changing time step for efficieny
-    if np.linalg.norm(p.acceleration)<0.01:
-        dt = 2
-    else:
-        dt = 0.1
-    p.update(dt)
-    simulation_time_passed += dt
-    if p.hasBurst:
-        break
-    positions.append(p.position.copy())
-print(f"SIMULATION TIME PASSED: {simulation_time_passed}")
-print(f"EXECUTION TIME: {datetime.datetime.now() - start_time}")
-
-lats, lons, alts = [], [], []
-for pos in positions:
-    lat, lon, alt = pm.ecef2geodetic(*pos)
-    lats.append(lat)
-    lons.append(lon)
-    alts.append(alt)
-
-lats = np.array(lats)
-lons = np.array(lons)
-alts = np.array(alts)
-
-fig = plt.figure(figsize=(10, 7))
-ax = fig.add_subplot(111, projection='3d')
-
-ax.plot(lons, lats, alts, color='blue', label='Balloon path')
-ax.scatter(lons[0], lats[0], alts[0], color='green', label='Start')
-ax.scatter(lons[-1], lats[-1], alts[-1], color='red', label='End')
-
-ax.set_xlabel('Longitude (deg)')
-ax.set_ylabel('Latitude (deg)')
-ax.set_zlabel('Altitude (m)')
-ax.legend()
-plt.show()
+class superPressureWeatherBalloon(WeatherBalloon):
+    # super pressure balloon has constant volume
+    def updateVolume(self):
+        pass

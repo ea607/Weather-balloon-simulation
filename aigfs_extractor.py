@@ -4,6 +4,8 @@ from datetime import datetime
 import xarray as xr
 import pymap3d as pm
 from math import *
+from scipy.interpolate import RegularGridInterpolator
+import numpy as np
 
 
 def get_latest_model_run():
@@ -21,6 +23,7 @@ def get_latest_model_run():
 
 def get_prediction_grib2_link():
     today = datetime.utcnow().strftime("%Y%m%d")
+    today = "20260308"
     # prediction model is run 4 times daily, 00, 06, 12, 18
     model_run, hours_after = get_latest_model_run()
     # model predicts future weather in intervals of 6 hours, see how many units have passed since model run
@@ -53,33 +56,42 @@ def download_grib2_to_data():
 
 
 
+
 class WindPredictor():
     def __init__(self):
         self.local_file = download_grib2_to_data()
         self.ds = xr.open_dataset(self.local_file, engine='cfgrib')
         self.ds = self.ds.sortby("latitude")
-        print(self.ds)
+
+        # prepare arrays
+        self.pressures = self.ds["isobaricInhPa"].values
+        self.lats = self.ds["latitude"].values
+        self.lons = self.ds["longitude"].values
+        self.u_data = self.ds["u"].values
+        self.v_data = self.ds["v"].values
+
+        # create fast interpolators
+        # note: the order of axes for RegularGridInterpolator is (pressure, lat, lon)
+        self.u_interp = RegularGridInterpolator(
+            (self.pressures, self.lats, self.lons), 
+            self.u_data, 
+            bounds_error=False, fill_value=None
+        )
+        self.v_interp = RegularGridInterpolator(
+            (self.pressures, self.lats, self.lons), 
+            self.v_data, 
+            bounds_error=False, fill_value=None
+        )
+
     def getWindLatLong(self, pressure, lat, lon):
         if lon < 0:
             lon = 360 + lon
-        pressure = max(min(pressure, float(self.ds.isobaricInhPa.max())),
-                   float(self.ds.isobaricInhPa.min()))
-        """
-        u_val = self.ds['u'].sel(isobaricInhPa=pressure, latitude=lat, longitude=lon, method="nearest").values
-        v_val = self.ds['v'].sel(isobaricInhPa=pressure, latitude=lat, longitude=lon, method="nearest").values"""
-        u_val = self.ds['u'].interp(
-            isobaricInhPa=pressure,
-            latitude=lat,
-            longitude=lon
-        ).values
+        pressure = max(min(pressure, self.pressures.max()), self.pressures.min())
 
-        v_val = self.ds['v'].interp(
-            isobaricInhPa=pressure,
-            latitude=lat,
-            longitude=lon
-        ).values
-        
-        #print(self.ds['u'].sel(isobaricInhPa=pressure, latitude=lat, longitude=lon, method="nearest"))
+        point = np.array([[pressure, lat, lon]])
+        u_val = self.u_interp(point)[0]
+        v_val = self.v_interp(point)[0]
+
         return u_val, v_val
     def getWindEC(self, x, y, z, altitude, pressure, debug=False):
         lat, lon, alt = pm.ecef2geodetic(x, y, z)
