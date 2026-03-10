@@ -79,6 +79,12 @@ class WindPredictor():
             self.v_data, 
             bounds_error=False, fill_value=None
         )
+        print(self.ds["valid_time"].values)
+        print(self.ds["time"].values)
+        print(self.ds["step"].values)
+        print(self.ds["valid_time"])
+        print(self.ds["time"])
+        print(self.ds["step"])
 
     def getWindLatLong(self, pressure, lat, lon):
         if lon < 0:

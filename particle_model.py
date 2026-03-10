@@ -2,7 +2,7 @@ import numpy as np
 import math
 # atmosphere model from https://www.pdas.com/atmos.html
 from atmos_model import SimpleAtmosphere, TZERO, PZERO, RHOZERO
-from aigfs_extractor import WindPredictor
+from aigfs_extracter2 import WindPredictor
 import pymap3d as pm
 import datetime
 
@@ -59,13 +59,14 @@ class Particle:
         return f"P#{self.id}, POS={self.position.round(3).tolist()}, VEL={self.velocity.round(3).tolist()}, ACC={self.acceleration.round(3).tolist()}"
     
 class WeatherBalloon(Particle):
-    def __init__(self, lat=90, lon=0, mass=0.4, radius=0.5, burst_radius=1.5):
+    def __init__(self, lat=90, lon=0, mass=0.4, radius=0.5, burst_radius=1.5, sim_time=datetime.datetime.now(tz=datetime.timezone.utc)):
         super().__init__()
 
         self.mass = mass
         self.radius = radius
         # radius at bursting point
         self.burst_radius = burst_radius
+        self.sim_time = sim_time
 
         self.volume = (4/3) * math.pi * (self.radius **3)
         self.initial_radius = self.radius
@@ -132,7 +133,7 @@ class WeatherBalloon(Particle):
         if dist_moved > self._wind_threshold:
             air_density, pressure, temp = self.calculateStatsAtAlt(self._alt)
             x, y, z = self.position
-            self._wind_cache = windPredictor.getWindEC(x, y, z, self._alt, pressure=pressure)
+            self._wind_cache = windPredictor.getWindEC(x, y, z, self._alt, pressure=pressure, target_time=self.sim_time)
             self._last_wind_pos = np.array(self.position)
         return self._wind_cache
     def updateVolume(self):
@@ -147,6 +148,7 @@ class WeatherBalloon(Particle):
         print(f"BALLOON BURST at ALT={self._alt}")
         self.hasBurst = True
     def onUpdate(self, dt):
+        self.sim_time += datetime.timedelta(seconds=dt)
         self._lat, self._lon, self._alt = pm.ecef2geodetic(*self.position)
         self.updateVolume()
     def getStatus(self):
