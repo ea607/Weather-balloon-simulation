@@ -58,20 +58,17 @@ def download_grib2_to_data():
 
 
 class WindPredictor():
-    def __init__(self):
+    def __init__(self, sim_start=datetime.utcnow()):
         self.local_file = download_grib2_to_data()
         self.ds = xr.open_dataset(self.local_file, engine='cfgrib')
         self.ds = self.ds.sortby("latitude")
 
-        # prepare arrays
         self.pressures = self.ds["isobaricInhPa"].values
         self.lats = self.ds["latitude"].values
         self.lons = self.ds["longitude"].values
         self.u_data = self.ds["u"].values
         self.v_data = self.ds["v"].values
 
-        # create fast interpolators
-        # note: the order of axes for RegularGridInterpolator is (pressure, lat, lon)
         self.u_interp = RegularGridInterpolator(
             (self.pressures, self.lats, self.lons), 
             self.u_data, 
