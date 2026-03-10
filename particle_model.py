@@ -4,7 +4,7 @@ import math
 from atmos_model import SimpleAtmosphere, TZERO, PZERO, RHOZERO
 from aigfs_extracter2 import WindPredictor
 import pymap3d as pm
-import datetime
+from datetime import datetime, timezone, timedelta
 
 EARTH_MASS = 5.9722 * 10**24
 GRAVITATIONAL_CONST = 6.6743 * 10**-11
@@ -59,7 +59,7 @@ class Particle:
         return f"P#{self.id}, POS={self.position.round(3).tolist()}, VEL={self.velocity.round(3).tolist()}, ACC={self.acceleration.round(3).tolist()}"
     
 class WeatherBalloon(Particle):
-    def __init__(self, lat=90, lon=0, mass=0.4, radius=0.5, burst_radius=1.5, sim_time=datetime.datetime.now(tz=datetime.timezone.utc)):
+    def __init__(self, lat=90, lon=0, mass=0.4, radius=0.5, burst_radius=1.5, sim_time=datetime.now(tz=timezone.utc)):
         super().__init__()
 
         self.mass = mass
@@ -148,7 +148,7 @@ class WeatherBalloon(Particle):
         print(f"BALLOON BURST at ALT={self._alt}")
         self.hasBurst = True
     def onUpdate(self, dt):
-        self.sim_time += datetime.timedelta(seconds=dt)
+        self.sim_time += timedelta(seconds=dt)
         self._lat, self._lon, self._alt = pm.ecef2geodetic(*self.position)
         self.updateVolume()
     def getStatus(self):

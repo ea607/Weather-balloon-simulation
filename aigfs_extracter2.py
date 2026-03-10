@@ -17,8 +17,8 @@ def get_model_run(target_time):
     """
     # this is the time when the model made its predictions
     model_run_time = target_time
-    if model_run_time > datetime.now(tz=datetime.timezone.utc):
-        model_run_time = datetime.now(tz=datetime.timezone.utc)
+    if model_run_time > datetime.now(tz=timezone.utc):
+        model_run_time = datetime.now(tz=timezone.utc)
     model_run = 0
     # if target time in last four hours we need prev model run since model takes 4 hours to generate
     if target_time > (datetime.now(tz=timezone.utc) - timedelta(hours=4)):
